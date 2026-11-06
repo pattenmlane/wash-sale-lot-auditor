@@ -1,0 +1,12 @@
+_ > nanoagent.plugin.v0001.ProductConfig:
+tagline: "Catch the stock losses that don't count yet"
+summary: "Give it a case number and an agent reads a year of trades in two stocks, finds the sales whose losses are wash sales, and saves what each sale really realized. A share-by-share replay of the whole year decides whether it got there."
+highlights:
+  - "Every case has one exact answer in whole cents, with no rounding"
+  - "Traps at 30 and 31 days and across tickers change the answer if misread"
+  - "Ignoring wash sales gives the wrong total every time"
+  - "Judged on the saved audit, not on what the agent says it did"
+steps:
+  - "Ask for a case by number, such as case 7"
+  - "The agent reads the trades and decides which losses move to which shares"
+  - "It saves the audit, and the verdict shows whether every sale is right"

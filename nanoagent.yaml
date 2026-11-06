@@ -1,0 +1,46 @@
+_ > nanoagent.plugin.v0001.ManifestConfig:
+id: wash-sale-lot-auditor
+name: Wash Sale Lot Auditor
+version: 0.1.0
+status: ready
+spec: nanoagent.plugin/v0001
+
+runtime > nanoagent.plugin.v0001.RuntimeConfig:
+  type: mcp_stdio
+  command: [uv, run, --frozen, python, -m, plugin]
+
+permissions > nanoagent.plugin.v0001.PermissionsConfig:
+  network > nanoagent.plugin.v0001.NetworkConfig:
+    hosts: []
+  filesystem > nanoagent.plugin.v0001.FilesystemConfig:
+    write: [workspace]
+
+# One entry per contract.Tool; its input and output classes are contract.TOOLS's.
+tools > dict[contract.Tool, nanoagent.plugin.v0001.ToolConfig]:
+  pin_audit:
+    description: Pin the task's answer key, the trades and their lot-level audit, out of the agent's sight
+  read_trades:
+    description: Read every buy and sell of a case's year of trades
+  apply_matches:
+    description: Carry out the given wash sale matches and price every sale, without judging whether the matches are right
+  save_audit:
+    description: Save each sale's realized gain and disallowed loss, and the total, as audits/<seed>.json in the workspace
+
+# One entry per contract.Task; its input class is contract.TASKS's.
+tasks > dict[contract.Task, nanoagent.plugin.v0001.TaskConfig]:
+  audit-wash-sales:
+    description: Find the wash sales in a year of trades and save each sale's realized gain and disallowed loss
+    runner: agent
+    tools: [read_trades, apply_matches, save_audit]
+    reference: pin_audit
+    instructions: |-
+      Plan. Exactly four tool calls, then submit: read_trades with the seed; apply_matches with matches [] to see what each sale sold and each share's gain; apply_matches with the matches you decide on; save_audit with the sales and total it returned. Each reply has a small token limit, so call apply_matches with [] straight after read_trades, with no analysis, and do your thinking only after you see its output. Reason briefly.
+      Shares. The shares of a buy are numbered from 1, and each starts with a basis of the buy's price_cents. Tickers never mix: a buy of the other ticker is never a replacement, however close.
+      Sales. Handle sales one at a time in day order, finishing each before the next. A sale sells the earliest-bought shares of its ticker still held, lowest number first.
+      Loss shares. A sold share is a loss share when its basis is above the sale price; its loss is basis minus price. Only those shares count: a sale can hold both loss and gain shares, and a share sold at its basis has no loss.
+      Replacements. For a sale on day D, a replacement share is a share of the same ticker from a buy on day B where the difference between B and D is at most 30, before or after the sale. 30 days counts; 31 does not. Later buys count, and so do the unsold shares of a buy this sale took from. The shares sold by this sale or an earlier one do not count, and neither does a share that has already absorbed a loss: each share absorbs at most one loss, ever.
+      Matching. Take the sale's loss shares in the order sold. Each takes the first replacement share left: earliest buy first, lowest number first. A loss share with none left stays an allowed loss.
+      Effect. A matched share's whole loss is disallowed and added to its replacement share's basis, one share to one share, with no rounding or proportions. So a later sale of that share has a higher basis, as apply_matches shows, and if that makes it a loss share, its whole loss can be matched in turn. Work this out for later sales before deciding their matches.
+      apply_matches. Each match {sale_id, buy_id, shares} moves the sale's next loss shares onto the next shares of that buy that are unsold and have absorbed nothing. List a sale's matches earliest buy first. It does the arithmetic and refuses only shares that do not exist; it never checks these rules, so a wrong match gives a wrong result.
+      Result. realized_cents is the sale's gain over all its shares, with the disallowed losses left out; negative is a loss. disallowed_cents is the sum of its disallowed losses, 0 if none. total_realized_cents sums realized_cents. List every sale once.
+      Submit seed, path, sales and total_realized_cents exactly as save_audit returned them.
